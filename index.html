@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
+<title>Mini PUBG Lite - Top-Down (Single File)</title>
+<style>
+  :root{--bg:#0b1220;--panel:#0f1724;--ui:#1b2430;--accent:#ffd166;}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Arial;color:#e6eef8;background:var(--bg);}
+  #gameWrap{display:flex;align-items:center;justify-content:center;height:100vh;gap:12px;box-sizing:border-box;padding:20px;}
+  #uiPanel{width:320px;background:linear-gradient(180deg,var(--panel),#0b1420);border-radius:12px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,.6);}
+  h1{margin:8px 0 6px;font-size:18px}
+  button{background:var(--accent);border:none;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer}
+  #startScreen{text-align:center}
+  canvas{background:linear-gradient(180deg,#2b3b54,#1d2938);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.6);display:block;max-width:100%}
+  #topBar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}
+  #scoreboard{font-size:14px}
+  #mobileUI{position:absolute;left:12px;bottom:12px;display:none;user-select:none}
+  .joy{width:120px;height:120px;border-radius:999px;background:rgba(255,255,255,0.04);touch-action:none;position:relative}
+  .thumb{width:48px;height:48px;border-radius:999px;background:rgba(255,255,255,0.12);position:absolute;left:36px;top:36px;transform:translate(0,0)}
+  #fireBtn{position:absolute;right:18px;bottom:18px;width:86px;height:86px;border-radius:999px;background:rgba(255,50,50,0.9);display:none;align-items:center;justify-content:center;color:white;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  #log{font-size:12px;margin-top:8px;height:120px;overflow:auto;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px}
+  #controls{font-size:13px;margin-top:8px;color:#cdd9f1}
+  .hpBar{height:10px;background:#18323d;border-radius:6px;overflow:hidden}
+  .hpFill{height:100%;background:linear-gradient(90deg,#4be37a,#2fb85a);width:100%}
+  #mobileUI.show{display:block}
+  @media (max-width:900px){
+    #uiPanel{display:none}
+    #mobileUI{display:block}
+    #fireBtn{display:flex}
+  }
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <div style="position:relative">
+    <div id="startScreen">
+      <div style="text-align:center;margin-bottom:12px">
+        <h1>Mini PUBG Lite — Top-Down</h1>
+        <div style="margin-bottom:8px">Loot sistemi: yerde silah al (3 çeşit). 10 bot. Mobil ve PC uyumlu.</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px">
+          <label style="font-size:13px">Player Name: <input id="playerName" value="Player" style="padding:6px;border-radius:6px;border:0;"/></label>
+        </div>
+        <button id="startBtn">START</button>
+      </div>
+      <div style="font-size:13px;color:#cbd6ea">PC: WASD + Mouse, Mobil: joystick + Ateş butonu</div>
+    </div>
+
+    <canvas id="game" width="900" height="600" style="display:none"></canvas>
+
+    <!-- Mobile controls -->
+    <div id="mobileUI">
+      <div class="joy" id="joyLeft"><div class="thumb" id="thumb"></div></div>
+    </div>
+    <div id="fireBtn">FIRE</div>
+  </div>
+
+  <div id="uiPanel">
+    <div id="topBar">
+      <div id="scoreboard">
+        <div id="playerLabel">Player: —</div>
+        <div style="margin-top:6px">Kills: <span id="kills">0</span></div>
+      </div>
+      <div style="text-align:right">
+        <div>Remaining Bots: <span id="botsLeft">10</span></div>
+        <div style="margin-top:6px">Weapon: <span id="weaponName">None</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:8px">
+      <div class="hpBar"><div class="hpFill" id="hpFill" style="width:100%"></div></div>
+      <div id="hpText" style="font-size:12px;margin-top:6px">HP: 100</div>
+    </div>
+
+    <div id="log"></div>
+    <div id="controls">
+      <div style="margin-top:6px"><b>PC Controls:</b> W A S D — hareket, Mouse — hedef, LClick — ateş</div>
+      <div style="margin-top:6px"><b>Mobile:</b> Sol joystick — hareket, Sağ alt tuş — ateş</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========= GAME SINGLE-FILE IMPLEMENTATION =========
+   - Top-down arena
+   - 10 bots
+   - Loot drops with 3 weapons (pistol, AR, shotgun)
+   - Start button required
+   - PC + mobile controls (joystick + fire button)
+   - All in index.html
+*/
+
+// ---- Utilities
+const rand = (a,b)=>Math.random()*(b-a)+a;
+const choose = arr => arr[Math.floor(Math.random()*arr.length)];
+const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+
+// ---- DOM
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const startScreen = document.getElementById('startScreen');
+const playerNameInput = document.getElementById('playerName');
+const botsLeftLabel = document.getElementById('botsLeft');
+const killsLabel = document.getElementById('kills');
+const hpFill = document.getElementById('hpFill');
+const hpText = document.getElementById('hpText');
+const weaponName = document.getElementById('weaponName');
+const playerLabel = document.getElementById('playerLabel');
+const logBox = document.getElementById('log');
+const mobileUI = document.getElementById('mobileUI');
+const joyLeft = document.getElementById('joyLeft');
+const thumb = document.getElementById('thumb');
+const fireBtn = document.getElementById('fireBtn');
+
+let W = canvas.width, H = canvas.height;
+
+// ---- Game state
+let game;
+const GRASS = '#3b5a40';
+const ROCK = '#3a3f47';
+const STARTING_BOTS = 10;
+
+function pushLog(s){
+  const d = document.createElement('div'); d.textContent = s;
+  logBox.prepend(d);
+}
+
+// ---- Weapons (lootable)
+const WEAPONS = {
+  'fist': {name:'Fist', dmg:8, rate:0.5, speed:0, range:30, ammo:Infinity},
+  'pistol': {name:'Pistol', dmg:12, rate:3, speed:7, range:320, ammo:Infinity},
+  'ar': {name:'AR', dmg:10, rate:9, speed:10, range:420, ammo:Infinity},
+  'shotgun': {name:'Shotgun', dmg:18, pellets:6, spread:0.6, rate:1.5, speed:10, range:200, ammo:Infinity}
+};
+
+// ---- Entities
+function createPlayer(){
+  return {
+    id:'player',
+    name:playerNameInput.value || 'Player',
+    x:W/2,y:H/2,r:14,spd:2.6,rot:0,hp:100,maxHp:100,
+    weapon:'pistol',
+    kills:0,
+    dead:false,
+    lastFire:0
+  };
+}
+
+function createBot(id){
+  return {
+    id:'bot_'+id,
+    x:rand(40,W-40), y:rand(40,H-40), r:13, spd:1.2 + Math.random()*0.8,
+    hp:60, maxHp:60, state:'idle', lastSwitch:0, lastFire:0, weapon: choose(['pistol','ar'])
+  };
+}
+
+function createLoot(x,y){
+  // drop one of three weapons (pistol, ar, shotgun)
+  const w = choose(['pistol','ar','shotgun']);
+  return {id:'loot_'+Math.random().toString(36).slice(2), x,y, w};
+}
+
+// ---- Projectiles
+function makeBullet(x,y,dx,dy,owner,opts={}){
+  return {x,y,dx,dy,owner,spd:opts.spd||10,dmg:opts.dmg||10,range:opts.range||400,dist:0,shrap:opts.shrap||1};
+}
+
+// ---- Init game
+function initGame(){
+  W = canvas.width = 900; H = canvas.height = 600;
+  game = {
+    player: createPlayer(),
+    bots: [],
+    bullets: [],
+    loots: [],
+    obstacles: [],
+    time:0
+  };
+  for(let i=0;i<STARTING_BOTS;i++) game.bots.push(createBot(i+1));
+  // obstacles: some rectangles
+  for(let i=0;i<6;i++){
+    const ow=rand(60,160), oh=rand(40,120);
+    game.obstacles.push({x:rand(40,W-40-ow), y:rand(40,H-40-oh), w:ow, h:oh});
+  }
+  // initial loots
+  for(let i=0;i<6;i++) game.loots.push(createLoot(rand(60,W-60), rand(60,H-60)));
+  updateUI();
+  pushLog('Oyun başladı. Good luck!');
+}
+
+// ---- Input
+const keys = {};
+let mouse = {x:0,y:0,down:false};
+window.addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
+window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+canvas.addEventListener('mousemove',e=>{
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX-rect.left)*(canvas.width/rect.width);
+  mouse.y = (e.clientY-rect.top)*(canvas.height/rect.height);
+});
+canvas.addEventListener('mousedown',e=>mouse.down=true);
+window.addEventListener('mouseup',e=>mouse.down=false);
+
+// Mobile joystick handling
+let joyState = {x:0,y:0,active:false};
+(function setupJoystick(){
+  let rect = joyLeft.getBoundingClientRect();
+  const radius = 36;
+  const max = 40;
+  const updateThumb = (tx,ty)=>{
+    thumb.style.left = (tx+36)+'px';
+    thumb.style.top = (ty+36)+'px';
+  };
+
+  const toLocal = (ev) => {
+    rect = joyLeft.getBoundingClientRect();
+    const touch = ev.touches ? ev.touches[0] : ev;
+    return {x: touch.clientX - rect.left - rect.width/2, y: touch.clientY - rect.top - rect.height/2};
+  };
+
+  const start = (ev) => { joyState.active=true; const p=toLocal(ev); joyState.x=p.x; joyState.y=p.y; clampThumb(); };
+  const move = (ev) => { if(!joyState.active) return; const p=toLocal(ev); joyState.x=p.x; joyState.y=p.y; clampThumb(); };
+  const end = (ev) => { joyState.active=false; joyState.x=0;joyState.y=0; updateThumb(0,0); };
+
+  function clampThumb(){
+    let x = joyState.x, y = joyState.y;
+    const m = Math.hypot(x,y);
+    const maxd = 40;
+    if(m>maxd){ x = (x/m)*maxd; y = (y/m)*maxd; }
+    updateThumb(x,y);
+  }
+
+  joyLeft.addEventListener('touchstart',start); joyLeft.addEventListener('touchmove',move); joyLeft.addEventListener('touchend',end);
+  joyLeft.addEventListener('mousedown', (e)=>{e.preventDefault(); start(e); window.addEventListener('mousemove', move); window.addEventListener('mouseup', ()=>{end(); window.removeEventListener('mousemove', move);} )});
+})();
+
+fireBtn.addEventListener('touchstart', (e)=>{mouse.down=true; e.preventDefault()});
+fireBtn.addEventListener('touchend', ()=>{mouse.down=false});
+
+// ---- Game logic helpers
+function rectIntersects(x,y,w,h, rx,ry,rw,rh){
+  return !(x+ w < rx || x > rx+rw || y + h < ry || y > ry + rh);
+}
+function circleRectCollision(cx,cy,r, rx,ry,rw,rh){
+  const nearestX = Math.max(rx, Math.min(cx, rx+rw));
+  const nearestY = Math.max(ry, Math.min(cy, ry+rh));
+  const dx = cx - nearestX, dy = cy - nearestY;
+  return (dx*dx + dy*dy) < (r*r);
+}
+
+// ---- Update UI
+function updateUI(){
+  botsLeftLabel.textContent = game.bots.length;
+  killsLabel.textContent = game.player.kills;
+  hpFill.style.width = Math.max(0,(game.player.hp/game.player.maxHp*100)) + '%';
+  hpText.textContent = 'HP: ' + Math.floor(game.player.hp);
+  weaponName.textContent = WEAPONS[game.player.weapon].name;
+  playerLabel.textContent = 'Player: ' + game.player.name;
+}
+
+// ---- Weapons shooting
+function playerFire(){
+  const p = game.player;
+  const now = performance.now()/1000;
+  const w = WEAPONS[p.weapon];
+  if(!w) return;
+  if(now - p.lastFire < 1/w.rate) return;
+  p.lastFire = now;
+
+  const angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+  if(p.weapon === 'shotgun'){
+    for(let i=0;i<(w.pellets||6);i++){
+      const spread = (Math.random()-0.5)*w.spread;
+      const a = angle + spread;
+      const dx = Math.cos(a), dy = Math.sin(a);
+      game.bullets.push(makeBullet(p.x + dx*p.r, p.y + dy*p.r, dx, dy, p.id, {spd:w.speed, dmg:w.dmg, range:w.range}));
+    }
+  } else {
+    game.bullets.push(makeBullet(p.x + Math.cos(angle)*p.r, p.y + Math.sin(angle)*p.r, Math.cos(angle), Math.sin(angle), p.id, {spd:w.speed, dmg:w.dmg, range:w.range}));
+  }
+}
+
+// Bot firing
+function botFire(bot, target){
+  const now = performance.now()/1000;
+  const w = WEAPONS[bot.weapon] || WEAPONS.pistol;
+  if(now - bot.lastFire < 1/w.rate) return;
+  bot.lastFire = now;
+  const angle = Math.atan2(target.y - bot.y, target.x - bot.x);
+  if(bot.weapon === 'shotgun'){
+    for(let i=0;i<(w.pellets||5);i++){
+      const spread = (Math.random()-0.5)*w.spread;
+      const a = angle + spread;
+      game.bullets.push(makeBullet(bot.x + Math.cos(a)*bot.r, bot.y + Math.sin(a)*bot.r, Math.cos(a), Math.sin(a), bot.id, {spd:w.speed, dmg:w.dmg, range:w.range}));
+    }
+  } else {
+    game.bullets.push(makeBullet(bot.x + Math.cos(angle)*bot.r, bot.y + Math.sin(angle)*bot.r, Math.cos(angle), Math.sin(angle), bot.id, {spd:w.speed, dmg:w.dmg, range:w.range}));
+  }
+}
+
+// ---- Collisions and movement
+function moveEntity(e, dx, dy){
+  e.x += dx; e.y += dy;
+  // clamp to bounds
+  e.x = Math.max(10, Math.min(W-10, e.x));
+  e.y = Math.max(10, Math.min(H-10, e.y));
+  // obstacle collision simple pushback
+  game.obstacles.forEach(ob=>{
+    if(circleRectCollision(e.x,e.y,e.r, ob.x,ob.y,ob.w,ob.h)){
+      // push out along dx,dy
+      const overlapX = (e.x < ob.x) ? (e.x - (ob.x- e.r)) : (e.x > ob.x+ob.w ? e.x - (ob.x+ob.w + e.r) : 0);
+      const overlapY = (e.y < ob.y) ? (e.y - (ob.y- e.r)) : (e.y > ob.y+ob.h ? e.y - (ob.y+ob.h + e.r) : 0);
+      // simple correction
+      if(Math.abs(overlapX) > Math.abs(overlapY)) e.x -= overlapX;
+      else e.y -= overlapY;
+    }
+  });
+}
+
+// ---- Main update loop
+function update(dt){
+  if(!game) return;
+  game.time += dt;
+  const p = game.player;
+
+  // Input -> movement
+  let mvx = 0, mvy = 0;
+  // keyboard
+  if(keys['w']||keys['arrowup']) mvy -= 1;
+  if(keys['s']||keys['arrowdown']) mvy += 1;
+  if(keys['a']||keys['arrowleft']) mvx -= 1;
+  if(keys['d']||keys['arrowright']) mvx += 1;
+  // mobile joystick
+  if(joyState.active){
+    mvx += (joyState.x/40);
+    mvy += (joyState.y/40);
+  }
+  // normalize
+  const mag = Math.hypot(mvx,mvy);
+  if(mag>1){ mvx/=mag; mvy/=mag; }
+  moveEntity(p, mvx * p.spd, mvy * p.spd);
+
+  // mobile aim: if touch on right half, set mouse aim
+  // (we already map fireBtn to mouse.down)
+  // Player fire
+  if(mouse.down) playerFire();
+
+  // Bullets move
+  for(let i=game.bullets.length-1;i>=0;i--){
+    const b = game.bullets[i];
+    b.x += b.dx * b.spd;
+    b.y += b.dy * b.spd;
+    b.dist += b.spd;
+    // hit bots or player
+    let removed = false;
+    if(b.owner !== 'player'){
+      // bullet from bot -> check player
+      if(Math.hypot(b.x - p.x, b.y - p.y) < p.r+4){
+        p.hp -= b.dmg; game.bullets.splice(i,1); removed=true;
+        if(p.hp <= 0){ p.dead=true; pushLog('You died! Refresh to play again.'); }
+      }
+    } else {
+      // player bullet hits bots
+      for(let j=game.bots.length-1;j>=0;j--){
+        const bo = game.bots[j];
+        if(Math.hypot(b.x - bo.x, b.y - bo.y) < bo.r+4){
+          bo.hp -= b.dmg;
+          game.bullets.splice(i,1); removed=true;
+          if(bo.hp<=0){
+            // bot dies
+            game.bots.splice(j,1);
+            p.kills++; pushLog('Bot eliminated! Kills: '+p.kills);
+            // drop loot
+            if(Math.random() < 0.7) game.loots.push(createLoot(bo.x, bo.y));
+          }
+          break;
+        }
+      }
+    }
+    // remove if out of range or out of bounds
+    if(!removed && (b.dist > b.range || b.x<0||b.x>W||b.y<0||b.y>H)) game.bullets.splice(i,1);
+  }
+
+  // Bots AI
+  game.bots.forEach(bot=>{
+    // if close to player, attack
+    const d = Math.hypot(p.x - bot.x, p.y - bot.y);
+    if(d < 300){
+      // see (line-of-sight simple: ignore obstacles)
+      // move toward with some randomness
+      const dx = (p.x - bot.x)/d;
+      const dy = (p.y - bot.y)/d;
+      moveEntity(bot, dx * bot.spd * 1.1, dy * bot.spd * 1.1);
+      // fire sometimes if in range
+      if(d < 420) botFire(bot, p);
+    } else {
+      // wander
+      if(game.time - bot.lastSwitch > 2.2 + Math.random()*2.5){
+        bot.target = {x: rand(20,W-20), y: rand(20,H-20)};
+        bot.lastSwitch = game.time;
+      }
+      if(bot.target){
+        const dx = bot.target.x - bot.x, dy = bot.target.y - bot.y;
+        const md = Math.hypot(dx,dy);
+        if(md>4) moveEntity(bot, (dx/md)*bot.spd, (dy/md)*bot.spd);
+      }
+    }
+  });
+
+  // Loot pickup
+  for(let i=game.loots.length-1;i>=0;i--){
+    const l = game.loots[i];
+    if(Math.hypot(l.x - p.x, l.y - p.y) < 20){
+      p.weapon = l.w;
+      pushLog('Picked up: ' + WEAPONS[l.w].name);
+      game.loots.splice(i,1);
+    }
+  }
+
+  // occasionally spawn loot if few
+  if(game.loots.length < 4 && Math.random() < 0.006) game.loots.push(createLoot(rand(40,W-40), rand(40,H-40)));
+
+  // update UI
+  updateUI();
+}
+
+// ---- Render
+function draw(){
+  if(!game) return;
+  const p = game.player;
+  ctx.clearRect(0,0,W,H);
+
+  // background (grid / grass)
+  ctx.fillStyle = '#25403a';
+  ctx.fillRect(0,0,W,H);
+
+  // obstacles
+  game.obstacles.forEach(ob=>{
+    ctx.fillStyle = ROCK;
+    ctx.fillRect(ob.x,ob.y,ob.w,ob.h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.strokeRect(ob.x,ob.y,ob.w,ob.h);
+  });
+
+  // loots
+  game.loots.forEach(l=>{
+    ctx.save();
+    ctx.translate(l.x,l.y);
+    ctx.beginPath();
+    ctx.fillStyle = (l.w==='pistol')? '#f2a65a' : (l.w==='ar')? '#8be49a' : '#e06a8a';
+    ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='white'; ctx.font='10px Arial'; ctx.textAlign='center'; ctx.fillText(WEAPONS[l.w].name,0,26);
+    ctx.restore();
+  });
+
+  // bullets
+  game.bullets.forEach(b=>{
+    ctx.beginPath();
+    ctx.fillStyle = '#ffd';
+    ctx.arc(b.x,b.y,3,0,Math.PI*2); ctx.fill();
+  });
+
+  // bots
+  game.bots.forEach(bot=>{
+    // shadow
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.ellipse(bot.x+4, bot.y+8, bot.r*1.1, bot.r*0.6, 0,0,Math.PI*2); ctx.fill();
+
+    // body
+    ctx.beginPath();
+    ctx.fillStyle = '#d45b5b';
+    ctx.arc(bot.x, bot.y, bot.r, 0, Math.PI*2); ctx.fill();
+
+    // HP
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(bot.x-16, bot.y - bot.r - 12, 32,6);
+    ctx.fillStyle = '#6ee37a'; ctx.fillRect(bot.x-16, bot.y - bot.r -12, 32*(bot.hp/bot.maxHp),6);
+  });
+
+  // player
+  // shadow
+  ctx.beginPath(); ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.ellipse(p.x+4,p.y+8,p.r*1.2,p.r*0.6,0,0,Math.PI*2); ctx.fill();
+  // body with gradient
+  const g = ctx.createLinearGradient(p.x-p.r,p.y-p.r,p.x+p.r,p.y+p.r); g.addColorStop(0,'#4ab9ff'); g.addColorStop(1,'#2b7ee6');
+  ctx.beginPath(); ctx.fillStyle = g; ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  // gun direction
+  const ang = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+  ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x + Math.cos(ang)*(p.r+18), p.y + Math.sin(ang)*(p.r+18)); ctx.stroke();
+
+  // UI overlays: center crosshair
+  ctx.beginPath(); ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.moveTo(W/2-8,H/2); ctx.lineTo(W/2+8,H/2); ctx.stroke();
+
+  // minimap small (optional)
+  ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(W-150,10,140,90);
+  ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.fillRect(W-145,15,130,80);
+  // map items scaled
+  const sx = 130/W, sy = 80/H;
+  // player dot
+  ctx.fillStyle='#55f'; ctx.fillRect(W-145 + p.x*sx -2, 15 + p.y*sy -2, 4,4);
+  game.bots.forEach(b=>{ ctx.fillStyle='#f55'; ctx.fillRect(W-145 + b.x*sx -2, 15 + b.y*sy -2, 3,3); });
+
+}
+
+// ---- Game loop
+let last = performance.now();
+function gameloop(now){
+  const dt = (now - last)/1000;
+  last = now;
+  if(game && !game.player.dead){
+    update(dt);
+    draw();
+  }
+  requestAnimationFrame(gameloop);
+}
+
+// ---- Start handling
+startBtn.addEventListener('click', ()=>{
+  startScreen.style.display='none';
+  canvas.style.display='block';
+  mobileUI.classList.add('show');
+  fireBtn.style.display = 'flex';
+  initGame();
+  last = performance.now();
+  requestAnimationFrame(gameloop);
+});
+
+// responsive canvas sizing (keeps internal resolution but scales to fit)
+function fitCanvas(){
+  const wrap = canvas.parentElement;
+  const maxW = window.innerWidth - 360; // leave space for UIPanel on wide screens
+  const styleW = Math.min(maxW, 900);
+  canvas.style.width = styleW + 'px';
+  canvas.style.height = (styleW * (600/900)) + 'px';
+}
+window.addEventListener('resize', fitCanvas);
+fitCanvas();
+
+// mobile: translate touch position on right half to mouse aim
+(function mobileAim(){
+  window.addEventListener('touchmove', (e)=>{
+    // use the first touch that's on right half
+    const rect = canvas.getBoundingClientRect();
+    for(let t of e.touches){
+      if(t.clientX > rect.left + rect.width/2){
+        mouse.x = (t.clientX - rect.left) * (canvas.width/rect.width);
+        mouse.y = (t.clientY - rect.top) * (canvas.height/rect.height);
+        break;
+      }
+    }
+  }, {passive:true});
+})();
+
+</sc
