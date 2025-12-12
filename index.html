@@ -1,230 +1,107 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Mini PUBG 2D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ali – Kişisel Site</title>
+
 <style>
-    body { margin: 0; overflow: hidden; background: #222; }
-    #menu {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        background: #111;
-        color: white;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-    }
-    #startBtn {
-        padding: 20px 40px;
-        font-size: 30px;
-        background: #28a745;
-        color: white;
-        border: none;
-        border-radius: 10px;
-    }
+  body {
+    margin: 0;
+    font-family: Arial;
+    background: #111;
+    color: white;
+  }
+
+  header {
+    background: #000;
+    padding: 25px;
+    text-align: center;
+    font-size: 28px;
+    font-weight: bold;
+    letter-spacing: 2px;
+  }
+
+  .section {
+    padding: 25px;
+  }
+
+  .card {
+    background: #1a1a1a;
+    padding: 20px;
+    margin-top: 15px;
+    border-radius: 10px;
+  }
+
+  h2 {
+    border-bottom: 2px solid #333;
+    padding-bottom: 10px;
+  }
+
+  a {
+    color: #00eaff;
+  }
+
+  .skill {
+    background: #222;
+    padding: 10px;
+    border-radius: 8px;
+    margin: 5px 0;
+  }
 </style>
 </head>
 <body>
 
-<div id="menu">
-    <h1>Mini PUBG 2D</h1>
-    <button id="startBtn">START</button>
+<header>ALI – RESMİ SİTE</header>
+
+<div class="section">
+  <h2>Hakkımda</h2>
+  <div class="card">
+    <p>Ben Ali. Teknoloji, yazılım ve mobil uygulamalarla ilgileniyorum. 
+    Kendi projelerimi geliştiriyor ve internet üzerinde yeni sistemler deniyorum.</p>
+  </div>
+
+  <h2>Yaptıklarım</h2>
+  <div class="card">
+    <p>• Kendi uygulamalarımı geliştiriyorum<br>
+       • Web projeleri yapıyorum<br>
+       • Android APK modlama / paketleme<br>
+       • HTML, JS, CSS üzerinde çalışma<br>
+    </p>
+  </div>
+
+  <h2>Yeteneklerim</h2>
+  <div class="card">
+    <div class="skill">HTML / CSS / JS</div>
+    <div class="skill">Mobil APK üretme</div>
+    <div class="skill">UI tasarımı</div>
+    <div class="skill">Vercel – GitHub deploy</div>
+  </div>
+
+  <h2>Sosyal Medya</h2>
+  <div class="card">
+    <p>Instagram: <a href="#">@koyarsin</a></p>
+    <p>YouTube: <a href="#">kanal</a></p>
+  </div>
 </div>
 
-<canvas id="game" width="900" height="600" style="display:none;"></canvas>
-
 <script>
+const CURRENT_VERSION = "1.0";
+const VERSION_URL = "https://seninsite.vercel.app/version.json";
 
-// ==== GAME CORE ====
+async function checkUpdate() {
+  try {
+    const res = await fetch(VERSION_URL + "?t=" + Date.now());
+    const data = await res.json();
 
-const canvas = document.getElementById("game");
-const c = canvas.getContext("2d");
-
-// Start Button
-document.getElementById("startBtn").onclick = () => {
-    document.getElementById("menu").style.display = "none";
-    canvas.style.display = "block";
-    startGame();
-};
-
-let player = { x: 450, y: 300, size: 20, hp: 100, speed: 3 };
-let bots = [];
-let bullets = [];
-let loot = [];
-
-let keys = {};
-
-// Keyboard movement
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-// Click to shoot
-canvas.addEventListener("mousedown", () => shoot(player.x, player.y));
-
-function startGame() {
-    spawnBots(10);
-    spawnLoot(8);
-    gameLoop();
-}
-
-// BOT SYSTEM
-function spawnBots(n) {
-    bots = [];
-    for (let i = 0; i < n; i++) {
-        bots.push({
-            x: Math.random() * 900,
-            y: Math.random() * 600,
-            size: 18,
-            hp: 50,
-            speed: 1.5
-        });
+    if (data.version !== CURRENT_VERSION) {
+      alert("Yeni bir güncelleme mevcut! Lütfen uygulamayı güncelleyin.");
     }
+  } catch (e) {}
 }
 
-// LOOT SYSTEM
-function spawnLoot(n) {
-    loot = [];
-    for (let i = 0; i < n; i++) {
-        loot.push({
-            x: Math.random() * 900,
-            y: Math.random() * 600,
-            type: "gun"
-        });
-    }
-}
-
-// SHOOT
-function shoot(x, y) {
-    const angle = Math.atan2(mouseY - y, mouseX - x);
-    bullets.push({
-        x,
-        y,
-        dx: Math.cos(angle) * 6,
-        dy: Math.sin(angle) * 6
-    });
-}
-
-let mouseX = 0, mouseY = 0;
-canvas.addEventListener("mousemove", e => {
-    mouseX = e.offsetX;
-    mouseY = e.offsetY;
-});
-
-// GAME LOOP
-function gameLoop() {
-    c.clearRect(0,0,900,600);
-    drawPlayer();
-    movePlayer();
-    drawBots();
-    moveBots();
-    drawBullets();
-    moveBullets();
-    drawLoot();
-    checkLootPickup();
-
-    requestAnimationFrame(gameLoop);
-}
-
-// PLAYER
-function drawPlayer() {
-    c.fillStyle = "cyan";
-    c.beginPath();
-    c.arc(player.x, player.y, player.size, 0, Math.PI*2);
-    c.fill();
-}
-
-function movePlayer() {
-    if (keys["w"]) player.y -= player.speed;
-    if (keys["s"]) player.y += player.speed;
-    if (keys["a"]) player.x -= player.speed;
-    if (keys["d"]) player.x += player.speed;
-}
-
-// BOTS
-function drawBots() {
-    c.fillStyle = "red";
-    bots.forEach(b => {
-        c.beginPath();
-        c.arc(b.x, b.y, b.size, 0, Math.PI*2);
-        c.fill();
-    });
-}
-
-function moveBots() {
-    bots.forEach(b => {
-        const angle = Math.atan2(player.y - b.y, player.x - b.x);
-        b.x += Math.cos(angle) * b.speed;
-        b.y += Math.sin(angle) * b.speed;
-
-        // Bot shoots randomly
-        if (Math.random() < 0.01) shootBot(b);
-    });
-}
-
-function shootBot(b) {
-    const angle = Math.atan2(player.y - b.y, player.x - b.x);
-    bullets.push({
-        x: b.x, y: b.y,
-        dx: Math.cos(angle) * 5,
-        dy: Math.sin(angle) * 5,
-        bot: true
-    });
-}
-
-// BULLETS
-function drawBullets() {
-    c.fillStyle = "yellow";
-    bullets.forEach(b => {
-        c.beginPath();
-        c.arc(b.x, b.y, 4, 0, Math.PI*2);
-        c.fill();
-    });
-}
-
-function moveBullets() {
-    bullets.forEach((b, i) => {
-        b.x += b.dx;
-        b.y += b.dy;
-
-        // Hit bot
-        bots.forEach((bot, j) => {
-            if (!b.bot && dist(b, bot) < bot.size) {
-                bot.hp -= 30;
-                bullets.splice(i,1);
-                if (bot.hp <= 0) bots.splice(j,1);
-            }
-        });
-
-        // Hit player
-        if (b.bot && dist(b, player) < player.size) {
-            player.hp -= 10;
-            bullets.splice(i,1);
-        }
-    });
-}
-
-// LOOT
-function drawLoot() {
-    c.fillStyle = "orange";
-    loot.forEach(l => {
-        c.fillRect(l.x - 10, l.y - 10, 20, 20);
-    });
-}
-
-function checkLootPickup() {
-    loot.forEach((l, i) => {
-        if (dist(l, player) < 25) {
-            loot.splice(i,1);
-        }
-    });
-}
-
-function dist(a,b) {
-    return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
+checkUpdate();
 </script>
+
 </body>
 </html>
